@@ -4,7 +4,7 @@
 
 카메라와 모델 추론은 웹앱이 맡고, 마이크로비트는 USB 케이블로 결과를 받습니다. 영상은 컴퓨터 밖으로 나가지 않습니다.
 
-- 웹앱: https://<GitHub아이디>.github.io/tm_microbit/
+- 웹앱: https://dkent12h.github.io/tm_microbit/
 - 지원 브라우저: 크롬, 엣지, 웨일 (아이패드·휴대폰 불가)
 - 지원 보드: micro:bit V1, V2
 
@@ -12,7 +12,7 @@
 
 1. https://makecode.microbit.org 에서 새 프로젝트를 엽니다.
 2. 블록 목록에서 **확장**을 누릅니다.
-3. 검색창에 `https://github.com/<GitHub아이디>/tm_microbit` 를 붙여 넣고 고릅니다.
+3. 검색창에 `https://github.com/dkent12h/tm_microbit` 를 붙여 넣고 고릅니다.
 
 ## 수업에서 쓰는 순서
 
