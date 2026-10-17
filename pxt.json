@@ -1,0 +1,19 @@
+{
+    "name": "tm_microbit",
+    "version": "0.1.0",
+    "description": "티처블머신 이미지 모델 분류 결과를 웹앱에서 받아 쓰는 블록 (엔트리 인공지능 블록 방식)",
+    "dependencies": {
+        "core": "*"
+    },
+    "files": [
+        "README.md",
+        "main.ts"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "blocksprj"
+}
