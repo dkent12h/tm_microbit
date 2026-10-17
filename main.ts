@@ -48,7 +48,13 @@ namespace TeachableAI {
         // Prediction format: TMPRED|label|probability(0..1)
         if (line.indexOf("TMPRED|") == 0) {
             let rest = line.substr(7)
-            let sep = rest.lastIndexOf("|")
+            let sep = -1
+            for (let k = rest.length - 1; k >= 0; k--) {
+                if (rest.charAt(k) == "|") {
+                    sep = k
+                    break
+                }
+            }
             if (sep < 0) return
             let label = rest.substr(0, sep)
             let p = parseFloat(rest.substr(sep + 1))
