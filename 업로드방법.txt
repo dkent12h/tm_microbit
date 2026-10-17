@@ -1,0 +1,11 @@
+1. GitHub에서 새 Public repository를 만듭니다. 추천 이름: pxt-teachable-ai
+2. 이 ZIP의 압축을 풀고 모든 파일/폴더를 repository 루트에 업로드합니다.
+3. GitHub Settings > Pages > Deploy from a branch > main > /docs 를 선택합니다.
+4. MakeCode micro:bit > Extensions에서 GitHub 저장소 주소를 붙여넣습니다.
+5. MakeCode에서 'Teachable AI' 블록을 사용해 모델 주소를 입력하고 micro:bit에 다운로드합니다.
+6. GitHub Pages 주소를 데스크톱 Chrome/Edge에서 열어 micro:bit 연결 > 카메라·AI 시작을 누릅니다.
+
+주의:
+- 첫 버전은 이미지 분류 모델 전용입니다.
+- 실제 추론은 PC 브라우저에서 수행하고, 결과를 USB Serial로 micro:bit에 보냅니다.
+- MakeCode Editor 내부에 웹캠 화면을 직접 삽입하는 방식은 공식 승인된 Editor Extension URL이 필요합니다.
