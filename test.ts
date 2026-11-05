@@ -1,24 +1,17 @@
-// 예제: 가위바위보 (클래스 이름: rock, paper, scissors)
-tm.onConnected(function () {
+TeachableAI.setModelUrl("https://teachablemachine.withgoogle.com/models/XXXX/")
+
+TeachableAI.onRecognized("Class 1", function () {
     basic.showIcon(IconNames.Yes)
 })
-tm.onLabel("rock", function () {
-    basic.showIcon(IconNames.SmallSquare)
+TeachableAI.onRecognized("Class 2", function () {
+    basic.showIcon(IconNames.No)
 })
-tm.onLabel("paper", function () {
-    basic.showIcon(IconNames.Square)
-})
-tm.onLabel("scissors", function () {
-    basic.showIcon(IconNames.Scissors)
-})
-tm.setModel("https://teachablemachine.withgoogle.com/models/모델ID/")
-tm.setThreshold(70)
+
 basic.forever(function () {
-    if (tm.label() == "") {
-        basic.clearScreen()
-    }
-    if (tm.isLabel("rock") && tm.confidenceOf("rock") > 90) {
-        music.playTone(262, music.beat(BeatFraction.Eighth))
+    if (TeachableAI.isLabelWithConfidence("Class 1", 80)) {
+        pins.digitalWritePin(DigitalPin.P0, 1)
+    } else {
+        pins.digitalWritePin(DigitalPin.P0, 0)
     }
     basic.pause(100)
 })
