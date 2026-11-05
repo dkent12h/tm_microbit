@@ -135,9 +135,13 @@ async function setupGatt() {
   const server = await device.gatt.connect();
   const service = await server.getPrimaryService(UART_SERVICE);
   const chars = await service.getCharacteristics();
-  const newRx = chars.find(c => c.properties.notify);
+  /* 마이크로비트의 송신 통로는 notify가 아니라 indicate인 경우가 있어 둘 다 찾는다 */
+  const newRx = chars.find(c => c.properties.notify || c.properties.indicate);
   const newTx = chars.find(c => c.properties.writeWithoutResponse || c.properties.write);
-  if (!newRx || !newTx) throw new Error("UART 특성을 찾지 못함");
+  if (!newRx || !newTx) {
+    const found = chars.map(c => c.uuid.slice(4, 8) + ":" + Object.keys(c.properties).filter(k => c.properties[k]).join("/")).join(", ");
+    throw new Error("UART 특성을 찾지 못함 (" + found + ")");
+  }
   /* 재연결 때 같은 통로에 수신 리스너가 두 번 붙으면 조각이 겹쳐 주소가 깨지므로 먼저 떼어 낸다 */
   if (rxChar) rxChar.removeEventListener("characteristicvaluechanged", onNotify);
   newRx.removeEventListener("characteristicvaluechanged", onNotify);
