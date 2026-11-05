@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teachable AI × micro:bit (블루투스)</title>
+<style>
+:root{--bg:#f4f3fb;--card:#fff;--text:#1d1b2e;--muted:#6b6880;--accent:#7c4dff;--ok:#12a150;--err:#d92d20;--warn:#b54708;--track:#ebe8f5;--line:#e3e0ef}
+@media (prefers-color-scheme:dark){:root{--bg:#121018;--card:#1c1926;--text:#ecebf3;--muted:#a19db5;--warn:#fdb022;--track:#2c2839;--line:#2f2a3d}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text)}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:30px;margin:0 0 6px}
+.sub{color:var(--muted);margin:0 0 20px;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.step{font-size:14px;font-weight:800;color:var(--accent);margin-bottom:6px}
+h2{font-size:21px;margin:0 0 12px}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px 18px;background:var(--accent);color:#fff;cursor:pointer;font-size:17px}
+button:disabled{opacity:.45;cursor:default}
+button.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+input{font:inherit;width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:15px}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.status{margin-top:12px;font-size:16px;color:var(--muted);overflow-wrap:anywhere}
+.status.ok{color:var(--ok)}.status.err{color:var(--err)}.status.warn{color:var(--warn)}
+#cam{display:flex;justify-content:center;align-items:center;min-height:280px;background:var(--track);border-radius:12px;overflow:hidden;color:var(--muted);text-align:center;padding:12px}
+#cam canvas{width:100%;max-width:340px;height:auto;border-radius:12px}
+#top{font-size:34px;font-weight:800;margin:0 0 6px;min-height:42px}
+.bar{margin:12px 0}
+.bar .name{display:flex;justify-content:space-between;font-weight:700;font-size:17px;margin-bottom:4px}
+.bar .track{height:24px;background:var(--track);border-radius:999px;overflow:hidden}
+.bar .fill{height:100%;width:0;background:#b9a6ff;transition:width .15s}
+.bar.top .fill{background:var(--accent)}
+#sent{font-family:ui-monospace,Menlo,monospace;font-size:14px;color:var(--muted);margin-top:10px;word-break:break-all}
+.tip{font-size:15px;color:var(--muted);line-height:1.6;margin:0}
+.badge{display:inline-block;background:var(--track);border-radius:999px;padding:4px 12px;font-size:14px;font-weight:700;margin-bottom:10px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Teachable AI × micro:bit</h1>
+  <p class="sub">카메라로 분류한 결과를 <b>블루투스</b>로 마이크로비트에 보냅니다. 마이크로비트 V2와 데스크톱 크롬·엣지가 필요합니다.</p>
+
+  <div class="grid">
+    <section class="card">
+      <div class="step">1단계</div>
+      <h2>micro:bit 연결 (블루투스)</h2>
+      <p class="tip">USB는 MakeCode에 꽂아 둔 채로 두세요. 마이크로비트에 프로그램을 다운로드한 뒤 연결합니다.</p>
+      <div class="row"><button id="connect">블루투스로 연결</button></div>
+      <div id="btStatus" class="status">연결 안 됨</div>
+    </section>
+
+    <section class="card">
+      <div class="step">2단계</div>
+      <h2>카메라 · AI 시작</h2>
+      <input id="url" placeholder="마이크로비트에서 모델 주소를 자동으로 받아옵니다">
+      <div class="row">
+        <button id="startAI">카메라 · AI 시작</button>
+        <button id="load" class="ghost">이 주소로 다시 불러오기</button>
+      </div>
+      <div id="modelStatus" class="status">모델 대기 중</div>
+    </section>
+
+    <section class="card">
+      <div class="step">카메라</div>
+      <div id="cam">카메라 · AI 시작을 누르면 화면이 나옵니다</div>
+    </section>
+
+    <section class="card">
+      <div class="step">인식 결과</div>
+      <div id="top"></div>
+      <div id="bars"></div>
+      <div id="sent"></div>
+    </section>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const enc = new TextEncoder();
+const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const MAX_LABEL_BYTES = 16;   // 마이크로비트 수신 버퍼가 작아서 클래스 이름은 짧게
+
+let device = null, rxChar = null, txChar = null;   // rxChar: 마이크로비트가 보내는 통로, txChar: 우리가 쓰는 통로
+let model = null, webcam = null, modelUrl = "", loading = false, busy = false;
+let lastSentLabel = "", lastSentTime = 0, gotUrl = false, helloTimer = null;
+let writing = false, rxText = "", reconnecting = false;
+const dec = new TextDecoder();
+
+function setStatus(id, text, cls) { const el = $(id); el.textContent = text; el.className = "status " + (cls || ""); }
+function cleanUrl(u) { u = (u || "").trim(); if (u && !u.endsWith("/")) u += "/"; return u; }
+function cleanLabel(s) { return String(s).replace(/[|\r\n]/g, " ").trim(); }
+function byteLen(s) { return enc.encode(s).length; }
+
+/* ---------- 블루투스 쓰기: 20바이트씩 나눠 보냄 ---------- */
+async function writeBytes(bytes) {
+  for (let i = 0; i < bytes.length; i += 20) {
+    const chunk = bytes.slice(i, i + 20);
+    if (txChar.writeValueWithoutResponse) await txChar.writeValueWithoutResponse(chunk);
+    else await txChar.writeValue(chunk);
+  }
+}
+async function writeLine(text, force) {
+  if (!txChar || !device || !device.gatt.connected) return;
+  if (writing && !force) return;          // 앞의 전송이 안 끝났으면 이번 것은 건너뜀
+  while (writing) await new Promise(r => setTimeout(r, 20));
+  writing = true;
+  try { await writeBytes(enc.encode(text + "\n")); } catch (e) {}
+  writing = false;
+}
+
+/* ---------- 블루투스 받기: 줄 단위로 조립 ---------- */
+function onNotify(ev) {
+  rxText += dec.decode(ev.target.value, { stream: true });
+  let i;
+  while ((i = rxText.indexOf("\n")) >= 0) {
+    handleLine(rxText.slice(0, i).replace(/\r$/, ""));
+    rxText = rxText.slice(i + 1);
+  }
+}
+function handleLine(line) {
+  if (line.startsWith("TMURL|")) {
+    gotUrl = true; clearInterval(helloTimer);
+    const u = cleanUrl(line.slice(6));
+    setStatus("#btStatus", "연결됨 · 모델 주소를 받았습니다", "ok");
+    if (u && u !== modelUrl) loadModel(u);
+  }
+}
+
+/* ---------- 연결 ---------- */
+async function setupGatt() {
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(UART_SERVICE);
+  const chars = await service.getCharacteristics();
+  const newRx = chars.find(c => c.properties.notify);
+  const newTx = chars.find(c => c.properties.writeWithoutResponse || c.properties.write);
+  if (!newRx || !newTx) throw new Error("UART 특성을 찾지 못함");
+  /* 재연결 때 같은 통로에 수신 리스너가 두 번 붙으면 조각이 겹쳐 주소가 깨지므로 먼저 떼어 낸다 */
+  if (rxChar) rxChar.removeEventListener("characteristicvaluechanged", onNotify);
+  newRx.removeEventListener("characteristicvaluechanged", onNotify);
+  rxChar = newRx; txChar = newTx;
+  rxText = ""; writing = false;
+  await rxChar.startNotifications();
+  rxChar.addEventListener("characteristicvaluechanged", onNotify);
+  startHello();
+}
+
+function startHello() {
+  gotUrl = false; clearInterval(helloTimer);
+  let tries = 0;
+  setStatus("#btStatus", "연결됨 · 모델 주소를 요청하는 중…", "ok");
+  const hello = () => {
+    if (gotUrl) return;
+    if (tries++ >= 8) {
+      clearInterval(helloTimer);
+      setStatus("#btStatus", "연결은 되었지만 모델 주소를 못 받았습니다. 블록에 주소를 넣고 다시 다운로드했는지 확인하거나, 아래에 직접 입력하세요.", "warn");
+      return;
+    }
+    writeLine("HELLO", true);
+  };
+  hello();
+  helloTimer = setInterval(hello, 1200);
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    setStatus("#btStatus", "이 브라우저는 블루투스를 지원하지 않습니다. 데스크톱 크롬이나 엣지를 쓰세요.", "err");
+    return;
+  }
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "BBC micro:bit" }],
+      optionalServices: [UART_SERVICE]
+    });
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+    setStatus("#btStatus", "연결하는 중…");
+    await setupGatt();
+    $("#connect").textContent = "연결됨"; $("#connect").disabled = true;
+  } catch (e) {
+    setStatus("#btStatus", explainError(e), "err");
+  }
+}
+
+/* 실패 원인을 종류별로 안내하고, 실제 오류 문구도 함께 보여 준다 */
+function explainError(e) {
+  console.error(e);
+  const msg = (e && e.message) || String(e);
+  const detail = " [" + ((e && e.name) || "Error") + ": " + msg + "]";
+  const fixWin = " ① Windows 설정 → Bluetooth 및 장치에서 'BBC micro:bit'를 제거 ② 마이크로비트 리셋 버튼 누르기 ③ 다시 연결해 보세요.";
+  if (/cancel/i.test(msg)) return "장치 선택을 취소했습니다." + detail;
+  if (/No Services matching|Service.*not found/i.test(msg))
+    return "마이크로비트에서 블루투스 통신 서비스를 찾지 못했습니다. 컴퓨터에 남은 옛 연결 정보 때문일 수 있습니다." + fixWin + detail;
+  if (/disconnected|Connection attempt failed|GATT|Unsupported device|Authentication|pair/i.test(msg))
+    return "마이크로비트와 연결하지 못했습니다." + fixWin + " 그래도 안 되면 프로젝트 설정의 블루투스를 '페어링 필요 없음'으로 바꾸고 다시 다운로드하세요." + detail;
+  return "연결 실패: 마이크로비트에 프로그램을 다운로드했는지 확인하세요." + detail;
+}
+
+async function onDisconnected() {
+  clearInterval(helloTimer); txChar = null;   // rxChar는 다음 연결 때 리스너를 떼기 위해 남겨 둠
+  $("#connect").textContent = "블루투스로 연결"; $("#connect").disabled = false;
+  if (reconnecting) return;
+  reconnecting = true;
+  /* 마이크로비트에 다운로드하면 연결이 끊어지므로 자동으로 다시 연결해 봄 */
+  for (let n = 1; n <= 10; n++) {
+    setStatus("#btStatus", "연결이 끊어졌습니다 · 다시 연결하는 중… (" + n + "/10)", "warn");
+    await new Promise(r => setTimeout(r, 2500));
+    try {
+      await setupGatt();
+      $("#connect").textContent = "연결됨"; $("#connect").disabled = true;
+      reconnecting = false; return;
+    } catch (e) {}
+  }
+  reconnecting = false;
+  setStatus("#btStatus", "자동 재연결에 실패했습니다. '블루투스로 연결'을 다시 눌러 주세요.", "err");
+}
+
+/* ---------- 모델 ---------- */
+async function loadModel(url) {
+  url = cleanUrl(url);
+  if (!url || loading) return;
+  if (!/^https:\/\/teachablemachine\.withgoogle\.com\/models\/[^/]+\/$/.test(url)) {
+    setStatus("#modelStatus", "티처블머신 공유 주소가 아닙니다: " + url, "err");
+    return;
+  }
+  loading = true; modelUrl = url; $("#url").value = url;
+  setStatus("#modelStatus", "모델을 불러오는 중…");
+  try {
+    model = await tmImage.load(url + "model.json", url + "metadata.json");
+    const labels = model.getClassLabels();
+    buildBars(labels);
+    const long = labels.filter(l => byteLen(cleanLabel(l)) > MAX_LABEL_BYTES);
+    if (long.length) setStatus("#modelStatus", "클래스 이름이 너무 깁니다(영어 16자·한글 5자 이내): " + long.join(", "), "warn");
+    else setStatus("#modelStatus", "모델 준비 완료 · 클래스 " + model.getTotalClasses() + "개", "ok");
+  } catch (e) {
+    model = null;
+    setStatus("#modelStatus", "모델을 불러오지 못했습니다. 주소와 '모델 업로드' 여부를 확인하세요.", "err");
+  }
+  loading = false;
+}
+
+function buildBars(labels) {
+  $("#bars").innerHTML = labels.map((l, i) =>
+    `<div class="bar" id="b${i}"><div class="name"><span></span><span class="pct">0%</span></div><div class="track"><div class="fill"></div></div></div>`
+  ).join("");
+  labels.forEach((l, i) => { $("#b" + i + " .name span").textContent = l; });
+}
+
+/* ---------- 카메라 · 예측 ---------- */
+async function startCamera() {
+  if (webcam) return;
+  try {
+    webcam = new tmImage.Webcam(340, 340, true);
+    await webcam.setup();
+    await webcam.play();
+    $("#cam").innerHTML = "";
+    $("#cam").appendChild(webcam.canvas);
+    requestAnimationFrame(loop);
+  } catch (e) {
+    webcam = null;
+    $("#cam").textContent = "카메라를 켤 수 없습니다. 주소창 왼쪽에서 카메라 권한을 허용해 주세요.";
+  }
+}
+
+async function loop() {
+  webcam.update();
+  if (model && !busy) {
+    busy = true;
+    try {
+      const preds = await model.predict(webcam.canvas);
+      render(preds);
+      send(preds);
+    } catch (e) {}
+    busy = false;
+  }
+  requestAnimationFrame(loop);
+}
+
+function topOf(preds) { return preds.reduce((a, b) => b.probability > a.probability ? b : a, preds[0]); }
+
+function render(preds) {
+  const top = topOf(preds);
+  $("#top").textContent = top.className + " " + Math.round(top.probability * 100) + "%";
+  preds.forEach((p, i) => {
+    const el = $("#b" + i); if (!el) return;
+    const pct = Math.round(p.probability * 100);
+    el.querySelector(".fill").style.width = pct + "%";
+    el.querySelector(".pct").textContent = pct + "%";
+    el.classList.toggle("top", p === top);
+  });
+}
+
+/* 결과가 바뀌면 바로, 같으면 0.4초마다 보냄 (블루투스는 한 번에 보내는 양이 적음) */
+function send(preds) {
+  if (!txChar) return;
+  const top = topOf(preds);
+  const label = cleanLabel(top.className);
+  const now = performance.now();
+  const changed = label !== lastSentLabel;
+  if (!changed && now - lastSentTime < 400) return;
+  if (changed && now - lastSentTime < 150) return;
+  lastSentLabel = label; lastSentTime = now;
+  const msg = "TMPRED|" + label + "|" + top.probability.toFixed(3);
+  writeLine(msg);
+  $("#sent").textContent = "micro:bit로 보냄 → " + msg;
+}
+
+$("#connect").onclick = connect;
+$("#startAI").onclick = async () => {
+  await startCamera();
+  const typed = $("#url").value;
+  if (!model && typed) loadModel(typed);
+  else if (!model && !modelUrl) setStatus("#modelStatus", "micro:bit를 연결하면 모델 주소를 받아옵니다. 직접 입력해도 됩니다.");
+};
+$("#load").onclick = () => { modelUrl = ""; loadModel($("#url").value); };
+</script>
+</body>
+</html>
